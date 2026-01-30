@@ -43,12 +43,16 @@ app.post("/api/chat", async (req, res) => {
   }
 });
 
+export default app;
+
 const PORT = process.env.PORT ?? 3001;
-app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-  if (!process.env.GEMINI_API_KEY) {
-    console.warn(
-      "Missing GEMINI_API_KEY. Get a free key at https://aistudio.google.com/apikey and add it to .env"
-    );
-  }
-});
+if (!process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Server running at http://localhost:${PORT}`);
+    if (!process.env.GEMINI_API_KEY) {
+      console.warn(
+        "Missing GEMINI_API_KEY. Get a free key at https://aistudio.google.com/apikey and add it to .env"
+      );
+    }
+  });
+}
