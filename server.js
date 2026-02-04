@@ -1,4 +1,5 @@
 import "dotenv/config";
+import crypto from "crypto";
 import express from "express";
 import cors from "cors";
 import { GoogleGenAI } from "@google/genai";
@@ -82,33 +83,74 @@ app.get("/api/jira/issue", async (req, res) => {
   }
 });
 
+const GEMINI_MODEL = "gemini-2.5-flash";
+const SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour
+
+/** Chat sessions: sessionId -> { chat, lastUsed } */
+const chatSessions = new Map();
+
+function pruneExpiredSessions() {
+  const now = Date.now();
+  for (const [id, data] of chatSessions.entries()) {
+    if (now - data.lastUsed > SESSION_TTL_MS) chatSessions.delete(id);
+  }
+}
+
 app.post("/api/chat", async (req, res) => {
   try {
     if (!process.env.GEMINI_API_KEY) {
       return res.status(500).json({
         error:
-          "Missing GEMINI_API_KEY. Get a free key at https://aistudio.google.com/apikey and add it to .env",
+          "Missing GEMINI_API_KEY",
       });
     }
-    const { message } = req.body;
+    const { message, sessionId, systemInstruction } = req.body;
     if (!message || typeof message !== "string") {
       return res.status(400).json({ error: "Missing or invalid 'message'" });
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: message,
-    });
+    pruneExpiredSessions();
 
-    const reply = response.text ?? "No response.";
-    res.json({ reply });
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    let reply;
+    let outSessionId = sessionId;
+
+    const existing = sessionId && chatSessions.get(sessionId);
+    if (existing) {
+      const { chat } = existing;
+      existing.lastUsed = Date.now();
+      const response = await chat.sendMessage({ message });
+      reply = response?.text ?? "No response.";
+    } else {
+      const config = systemInstruction && typeof systemInstruction === "string"
+        ? { systemInstruction }
+        : {};
+      const chat = ai.chats.create({
+        model: GEMINI_MODEL,
+        config,
+      });
+      const response = await chat.sendMessage({ message });
+      reply = response?.text ?? "No response.";
+      outSessionId = crypto.randomUUID();
+      chatSessions.set(outSessionId, { chat, lastUsed: Date.now() });
+    }
+
+    res.json({ reply, sessionId: outSessionId });
   } catch (err) {
     console.error(err);
     const status = err?.status ?? 500;
     const msg = err?.message ?? "Gemini request failed.";
     res.status(status).json({ error: msg });
   }
+});
+
+/** POST /api/chat/end — end a chat session (e.g. when user navigates away) */
+app.post("/api/chat/end", (req, res) => {
+  const { sessionId } = req.body ?? {};
+  if (sessionId && typeof sessionId === "string") {
+    chatSessions.delete(sessionId);
+  }
+  res.json({ ok: true });
 });
 
 export default app;
