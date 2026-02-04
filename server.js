@@ -35,7 +35,7 @@ app.get("/api/jira/issues", async (req, res) => {
   try {
     const base = JIRA_DOMAIN.replace(/\/$/, "");
     const jql = `assignee = "${email.trim()}" ORDER BY created DESC`;
-    const url = `${base}/rest/api/2/search?jql=${encodeURIComponent(jql)}&fields=summary,status,key,project,assignee&maxResults=50`;
+    const url = `${base}/rest/api/3/search/jql?jql=${encodeURIComponent(jql)}&fields=summary,status,key,project,assignee&maxResults=50`;
     const r = await fetch(url, {
       headers: { Accept: "application/json", Authorization: jiraAuthHeader },
     });
