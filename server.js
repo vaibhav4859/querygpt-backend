@@ -83,7 +83,7 @@ app.get("/api/jira/issue", async (req, res) => {
   }
 });
 
-const GEMINI_MODEL = "gemini-2.5-flash";
+const GEMINI_MODEL = "gemini-2.5-pro";
 const SESSION_TTL_MS = 60 * 60 * 1000; // 1 hour
 
 /** Chat sessions: sessionId -> { chat, lastUsed } */
